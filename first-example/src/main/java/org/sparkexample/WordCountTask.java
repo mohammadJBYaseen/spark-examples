@@ -6,6 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.util.Arrays;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -25,19 +29,32 @@ public class WordCountTask {
    * See {@see http://spark.apache.org/docs/latest/submitting-applications.html}
    */
   public static void main(String[] args) {
-    checkArgument(args.length > 0, "Please provide the path of input file as first parameter.");
-    new WordCountTask().run(args[0]);
+    checkArgument(args.length > 1, "Please provide the path of input file as first parameter, and output directory " +
+            "as second parameter");
+    try {
+      new WordCountTask().run(args[0],args[1]);
+    } catch (FileNotFoundException e) {
+      e.printStackTrace();
+    }
   }
 
   /**
    * The task body
    */
-  public void run(String inputFilePath) {
+  public void run(String inputFilePath, String outputDirectory) throws FileNotFoundException {
     /*
      * This is the address of the Spark cluster. We will call the task from WordCountTest and we
      * use a local standalone cluster. [*] means use all the cores available.
      * See {@see http://spark.apache.org/docs/latest/submitting-applications.html#master-urls}.
      */
+
+    File file = new File(outputDirectory);
+    if (!file.exists() || !file.isDirectory()){
+      throw new FileNotFoundException();
+    }
+
+    BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(file));
+
     String master = "local[*]";
 
     /*
@@ -55,7 +72,8 @@ public class WordCountTask {
         .flatMap(text -> Arrays.asList(text.split(" ")).iterator())
         .mapToPair(word -> new Tuple2<>(word, 1))
         .reduceByKey((a, b) -> a + b)
-        .foreach(result -> LOGGER.info(
-            String.format("Word [%s] count [%d].", result._1(), result._2)));
+        .foreach(result -> {LOGGER.info(String.format("Word [%s] count [%d].", result._1(), result._2));
+        bufferedOutputStream.write(String.format("Word [%s] count [%d].", result._1(), result._2).getBytes());
+        });
   }
 }
